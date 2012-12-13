@@ -83,6 +83,8 @@ public class FsBookController implements IBookController {
 			// Передана пустая строка
 			return searchRes;
 		}
+
+        Long timeSearch = System.currentTimeMillis();
 		
 		// Подготовим регулярное выражение для поиска
 		String regQuery = "";
@@ -111,6 +113,9 @@ public class FsBookController implements IBookController {
 		} catch (BookDefinitionException e) {
 			Log.e(TAG, e.getMessage());
 		}
+
+        timeSearch = System.currentTimeMillis() - timeSearch;
+        Log.i(TAG, String.format("Search \"%1$s\" in books %2$s:%3$s (time: %4$d ms)", query, fromBookID, toBookID, timeSearch));
 
 		return searchRes;
 	}

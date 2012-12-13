@@ -554,7 +554,7 @@ public class Librarian implements IChangeBooksListener  {
 				int toVerse = ref.getToVerse();
 				Chapter chapter = getChapterByNumber(getBookByID(getCurrModule(), ref.getBookID()), ref.getChapter());
 				crossReferenceContent.put(ref, 
-						StringProc.stripTags(chapter.getText(fromVerse, toVerse), "", true)
+						StringProc.stripTags(chapter.getText(fromVerse, toVerse))
 						.replaceAll("\\s(H|G)*\\d+", "")
 						.replaceAll("\\d+\\s", ""));
 			} catch (Exception e) {

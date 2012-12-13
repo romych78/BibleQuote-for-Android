@@ -16,6 +16,8 @@
 
 package com.BibleQuote.activity;
 
+import android.widget.*;
+import com.BibleQuote.managers.AsyncCommand;
 import com.BibleQuote.utils.ViewUtils;
 import com.actionbarsherlock.app.SherlockActivity;
 import com.BibleQuote.widget.ItemAdapter;
@@ -29,14 +31,8 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
-import android.widget.AdapterView;
 import android.widget.AdapterView.OnItemSelectedListener;
-import android.widget.EditText;
-import android.widget.ListView;
-import android.widget.SimpleAdapter;
-import android.widget.Spinner;
-import android.widget.TextView;
-import android.widget.Toast;
+import android.widget.AdapterView.OnItemClickListener;
 
 import com.BibleQuote.BibleQuoteApp;
 import com.BibleQuote.R;
@@ -54,18 +50,16 @@ import com.BibleQuote.utils.Task;
 
 public class SearchActivity extends SherlockActivity implements OnTaskCompleteListener {
 	private static final String TAG = "SearchActivity";
-	private Spinner s1, s2;
-	private ListView LV;
+	private Spinner spinnerFrom, spinnerTo;
+	private ListView ResultList;
 	private AsyncManager mAsyncManager;
 	private String progressMessage = "";
 
 	private LinkedHashMap<String, String> searchResults = new LinkedHashMap<String, String>();
 	private Librarian myLibararian;
-	private String query = "";
-	ArrayList<Item> searchItems = new ArrayList<Item>();
-	ArrayList<ItemList> books = new ArrayList<ItemList>();
+	private ArrayList<Item> searchItems = new ArrayList<Item>();
 
-	public void onCreate(Bundle savedInstanceState) {
+    public void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.search);
 		ViewUtils.setActionBarBackground(this);
@@ -83,14 +77,22 @@ public class SearchActivity extends SherlockActivity implements OnTaskCompleteLi
 			searchResults = myLibararian.getSearchResults();
 		}
 
-		LV = (ListView) findViewById(R.id.SearchLV);
-		LV.setOnItemClickListener(search_OnClick);
+        ((ImageButton)findViewById(R.id.SearchButton)).setOnClickListener(onClick_Search);
+
+        ResultList = (ListView) findViewById(R.id.SearchLV);
+		ResultList.setOnItemClickListener(onClick_searchResult);
 		setAdapter();
 
 		SpinnerInit();
 	}
 
-	/**
+    @Override
+    protected void onPostResume() {
+        super.onPostResume();
+        SpinnerInit();
+    }
+
+    /**
 	 * Устанавливает список результатов поиска по последнему запросу
 	 */
 	private void setAdapter() {
@@ -101,19 +103,19 @@ public class SearchActivity extends SherlockActivity implements OnTaskCompleteLi
 				humanLink = myLibararian.getOSIStoHuman(key);
 				searchItems.add(new SubtextItem(humanLink, searchResults.get(key)));
 			} catch (BookNotFoundException e) {
-				Log.i(TAG, e.toString());
-			} catch (OpenModuleException e) {
-				Log.i(TAG, e.toString());
-			}
+                ExceptionHelper.onBookNotFoundException(e, this, TAG);
+            } catch (OpenModuleException e) {
+                ExceptionHelper.onOpenModuleException(e, this, TAG);
+            }
 		}
 		ItemAdapter adapter = new ItemAdapter(this, searchItems);
-		LV.setAdapter(adapter);
+		ResultList.setAdapter(adapter);
 
 		String searchModuleID = PreferenceHelper.restoreStateString("searchModuleID");
 		if (myLibararian.getModuleID().equalsIgnoreCase(searchModuleID)) {
 			int changeSearchPosition = PreferenceHelper.restoreStateInt("changeSearchPosition");
 			if (changeSearchPosition < searchItems.size()) {
-				LV.setSelection(changeSearchPosition);
+				ResultList.setSelection(changeSearchPosition);
 			}
 		}
 
@@ -126,7 +128,7 @@ public class SearchActivity extends SherlockActivity implements OnTaskCompleteLi
 	}
 
 	private void SpinnerInit() {
-		books = new ArrayList<ItemList>();
+        ArrayList<ItemList> books = new ArrayList<ItemList>();
 		try {
 			books = myLibararian.getCurrentModuleBooksList();
 		} catch (OpenModuleException e) {
@@ -151,30 +153,16 @@ public class SearchActivity extends SherlockActivity implements OnTaskCompleteLi
 		};
 		AA.setViewBinder(viewBinder);
 
-		s1 = (Spinner) findViewById(R.id.FromBookCB);
-		s1.setAdapter(AA);
-		s1.setOnItemSelectedListener(onClick_FromBook);
+		spinnerFrom = (Spinner) findViewById(R.id.FromBookCB);
+		spinnerFrom.setAdapter(AA);
+		spinnerFrom.setOnItemSelectedListener(onClick_FromBook);
 
-		s2 = (Spinner) findViewById(R.id.ToBookCB);
-		s2.setAdapter(AA);
-		s2.setOnItemSelectedListener(onClick_ToBook);
-		
-		restoreSelectedPosition();
+		spinnerTo = (Spinner) findViewById(R.id.ToBookCB);
+		spinnerTo.setAdapter(AA);
+		spinnerTo.setOnItemSelectedListener(onClick_ToBook);
+
+ 		restoreSelectedPosition();
 	}
-
-	private AdapterView.OnItemClickListener search_OnClick = new AdapterView.OnItemClickListener() {
-		public void onItemClick(AdapterView<?> a, View v, int position, long id) {
-			String humanLink = ((SubtextItem) LV.getAdapter().getItem(position)).text;
-			
-			PreferenceHelper.saveStateInt("changeSearchPosition", position);
-			
-			Intent intent = new Intent();
-			intent.putExtra("linkOSIS", myLibararian.getHumanToOSIS(humanLink));
-			setResult(RESULT_OK, intent);
-
-			finish();
-		}
-	};
 
 	@Override
 	public Object onRetainNonConfigurationInstance() {
@@ -183,66 +171,74 @@ public class SearchActivity extends SherlockActivity implements OnTaskCompleteLi
 
 	public void onTaskComplete(Task task) {
 		if (task.isCancelled()) {
-			Toast.makeText(this, R.string.messageSearchCanceled,
-					Toast.LENGTH_LONG).show();
-		}
+			Toast.makeText(this, R.string.messageSearchCanceled, Toast.LENGTH_LONG).show();
+		} else {
+            setAdapter();
+        }
 		PreferenceHelper.saveStateInt("changeSearchPosition", 0);
 	}
 
-	private class StartSearch extends Task {
-		public StartSearch(String message, Boolean isHidden) {
-			super(message, isHidden);
-		}
+    class StartSearch implements AsyncCommand.ICommand {
+        private String query;
 
-		@Override
-		protected void onPostExecute(Boolean result) {
-			setAdapter();
-			super.onPostExecute(result);
-		}
+        public StartSearch (String query) {
+            this.query = query;
+        }
 
-		@Override
-		protected Boolean doInBackground(String... params) {
-			if (query.equals("")) {
-				return true;
-			}
+        @Override
+        public void execute() throws Exception {
+            if (query.equals("")) {
+                return;
+            }
 
-			int posFrom = s1.getSelectedItemPosition();
-			int posTo = s2.getSelectedItemPosition();
-			if (posFrom == AdapterView.INVALID_POSITION
-					|| posTo == AdapterView.INVALID_POSITION) {
-				return true;
-			}
+            int posFrom = spinnerFrom.getSelectedItemPosition();
+            int posTo = spinnerTo.getSelectedItemPosition();
+            if (posFrom == AdapterView.INVALID_POSITION || posTo == AdapterView.INVALID_POSITION) {
+                return;
+            }
 
-			String fromBookID = ((ItemList) s1.getItemAtPosition(posFrom))
-					.get("ID");
-			String toBookID = ((ItemList) s2.getItemAtPosition(posTo))
-					.get("ID");
-			
-			searchResults = new LinkedHashMap<String, String>();
-			try {
-				searchResults = myLibararian.search(query, fromBookID, toBookID);
-			} catch (BookNotFoundException e) {
-				Log.e(TAG, e.getMessage());
-			} catch (OpenModuleException e) {
-				Log.e(TAG, e.getMessage());
-			}
-			return true;
-		}
-	}
+            String fromBookID = ((ItemList) spinnerFrom.getItemAtPosition(posFrom)).get("ID");
+            String toBookID = ((ItemList) spinnerTo.getItemAtPosition(posTo)).get("ID");
+            searchResults = new LinkedHashMap<String, String>();
+            try {
+                searchResults = myLibararian.search(query, fromBookID, toBookID);
+            } catch (BookNotFoundException e) {
+                ExceptionHelper.onBookNotFoundException(e, SearchActivity.this, TAG);
+            } catch (OpenModuleException e) {
+                ExceptionHelper.onOpenModuleException(e, SearchActivity.this, TAG);
+            }
+        }
+    }
 
-	public void onSearchClick(View v) {
-		query = ((EditText) findViewById(R.id.SearchEdit)).getText().toString()
-				.trim();
-		mAsyncManager.setupTask(new StartSearch(progressMessage, false), this);
-	}
+    private Button.OnClickListener onClick_Search = new Button.OnClickListener() {
+        @Override
+        public void onClick(View view) {
+            String query = ((EditText) findViewById(R.id.SearchEdit)).getText().toString().trim();
+            mAsyncManager.setupTask(new AsyncCommand(new StartSearch(query), progressMessage, false), SearchActivity.this);
+        }
+    };
 
-	private OnItemSelectedListener onClick_FromBook = new OnItemSelectedListener() {
+    private OnItemClickListener onClick_searchResult = new OnItemClickListener() {
+        public void onItemClick(AdapterView<?> a, View v, int position, long id) {
+            String humanLink = ((SubtextItem) ResultList.getAdapter().getItem(position)).text;
+
+            PreferenceHelper.saveStateInt("changeSearchPosition", position);
+
+            Intent intent = new Intent();
+            intent.putExtra("linkOSIS", myLibararian.getHumanToOSIS(humanLink));
+            setResult(RESULT_OK, intent);
+
+            finish();
+        }
+    };
+
+    private OnItemSelectedListener onClick_FromBook = new OnItemSelectedListener() {
 		public void onItemSelected(AdapterView<?> arg0, View arg1, int arg2,
 				long arg3) {
-			int fromBook = s1.getSelectedItemPosition();
-			int toBook = s2.getSelectedItemPosition();
+			int fromBook = spinnerFrom.getSelectedItemPosition();
+			int toBook = spinnerTo.getSelectedItemPosition();
 			if (fromBook > toBook) {
-				s2.setSelection(fromBook);
+				spinnerTo.setSelection(fromBook);
 				toBook = fromBook;
 			}
 			saveSelectedPosition(fromBook, toBook);
@@ -255,10 +251,10 @@ public class SearchActivity extends SherlockActivity implements OnTaskCompleteLi
 	private OnItemSelectedListener onClick_ToBook = new OnItemSelectedListener() {
 		public void onItemSelected(AdapterView<?> arg0, View arg1, int arg2,
 				long arg3) {
-			int fromBook = s1.getSelectedItemPosition();
-			int toBook = s2.getSelectedItemPosition();
+			int fromBook = spinnerFrom.getSelectedItemPosition();
+			int toBook = spinnerTo.getSelectedItemPosition();
 			if (fromBook > toBook) {
-				s1.setSelection(toBook);
+				spinnerFrom.setSelection(toBook);
 				fromBook = toBook;
 			}
 			saveSelectedPosition(fromBook, toBook);
@@ -267,12 +263,6 @@ public class SearchActivity extends SherlockActivity implements OnTaskCompleteLi
 		public void onNothingSelected(AdapterView<?> arg0) {
 		}
 	};
-
-	@Override
-	protected void onPostResume() {
-		super.onPostResume();
-		SpinnerInit();
-	}
 
 	private void saveSelectedPosition(int fromBook, int toBook) {
 		PreferenceHelper.saveStateString("searchModuleID", myLibararian.getModuleID());
@@ -283,22 +273,22 @@ public class SearchActivity extends SherlockActivity implements OnTaskCompleteLi
 	private void restoreSelectedPosition() {
 		String searchModuleID = PreferenceHelper.restoreStateString("searchModuleID");
 		int fromBook = 0;
-		int toBook = s2.getCount() - 1;
+		int toBook = spinnerTo.getCount() - 1;
 		
 		if (myLibararian.getModuleID().equalsIgnoreCase(searchModuleID)) {
 			fromBook = PreferenceHelper.restoreStateInt("fromBook");
-			if (s1.getCount() <= fromBook) {
+			if (spinnerFrom.getCount() <= fromBook) {
 				fromBook = 0;
 			}
 			
 			toBook = PreferenceHelper.restoreStateInt("toBook");
-			if (s2.getCount() <= toBook) {
-				toBook = s2.getCount() - 1;
+			if (spinnerTo.getCount() <= toBook) {
+				toBook = spinnerTo.getCount() - 1;
 			}
 		}
 		
-		s1.setSelection(fromBook);
-		s2.setSelection(toBook);
+		spinnerFrom.setSelection(fromBook);
+		spinnerTo.setSelection(toBook);
 		
 		saveSelectedPosition(fromBook, toBook);
 	}

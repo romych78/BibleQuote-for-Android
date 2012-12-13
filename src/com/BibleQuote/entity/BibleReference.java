@@ -104,8 +104,7 @@ public class BibleReference {
 		this.toVerse = toVerse;
 	}
 	
-	public BibleReference(String moduleID, String bookID, int chapter,
-			int fromVerse, int toVerse) {
+	public BibleReference(String moduleID, String bookID, int chapter, int fromVerse, int toVerse) {
 		this.moduleID = moduleID;
 		this.bookID = bookID;
 		this.bookName = bookID;

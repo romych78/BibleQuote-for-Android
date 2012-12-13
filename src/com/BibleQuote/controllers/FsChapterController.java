@@ -73,7 +73,7 @@ public class FsChapterController implements IChapterController {
 				verseText = verseText.replaceAll("\\s(\\d)+", "");
 			}
 			
-			verseText = StringProc.stripTags(verseText, currModule.HtmlFilter, false);
+			verseText = StringProc.stripTags(verseText, currModule.HtmlFilter);
 			verseText = verseText.replaceAll("<a\\s+?href=\"verse\\s\\d+?\">(\\d+?)</a>", "<b>$1</b>");
 			if (currModule.isBible) {
 				verseText = verseText
