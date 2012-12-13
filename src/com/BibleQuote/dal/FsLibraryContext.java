@@ -392,7 +392,8 @@ public class FsLibraryContext extends LibraryContext {
 
 				if (str.toLowerCase().matches(regQuery)) {
 					BibleReference osisLink = new BibleReference(BibleReference.MOD_DATASOURCE_FS, module.getDataSourceID(), module.getID(), bookID, chapterNumber, verseNumber);
-					String content = StringProc.cleanVerseNumbers(StringProc.stripTags(str));
+					String content = StringProc.stripTags(str, module.HtmlFilter, true)
+						.replaceAll("^\\d+\\s+", "");
 					searchRes.put(osisLink.getPath(), content);
 				}
 			}
